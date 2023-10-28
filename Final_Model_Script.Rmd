@@ -1,0 +1,117 @@
+---
+title: "Final_Model_Script"
+author: "Yifan Jiang"
+date: "2023-09-06"
+output: html_document
+---
+
+```{r}
+# Load the library
+library(tidymodels)
+library(tidyverse)
+library(ISLR)
+library(xgboost)
+library(stacks)
+
+# Import data
+# Convert response variable as factor
+train2 <- read_csv("train2.csv")
+train2$action_taken <- as.factor(train2$action_taken)
+
+# Recipe of the model
+recipe2 <- recipe(action_taken ~
+  combined_loan_to_value_ratio +
+  loan_type +
+  income +
+  loan_purpose +
+  construction_method+
+  occupancy_type+
+  property_value +
+  loan_amount +
+  ethnicity_of_applicant_or_borrower_1 +
+  ethnicity_of_co_applicant_or_co_borrower_1 +
+  race_of_applicant_or_borrower_1 +
+  race_of_co_applicant_or_co_borrower_1 +
+  sex_of_applicant_or_borrower+
+  sex_of_co_applicant_or_co_borrower+
+  age_of_applicant_or_borrower+
+  age_of_co_applicant_or_co_borrower+
+  automated_underwriting_system_1 +
+  hoepa_status+
+  lien_status+
+  applicant_or_borrower_name_and_version_of_credit_scoring_model+
+  co_applicant_or_co_borrower_name_and_version_of_credit_scoring_model+
+  balloon_payment+
+  interest_only_payments+
+  negative_amortization+
+  other_non_amortizing_features+
+  manufactured_home_secured_property_type+
+  manufactured_home_land_property_interest+
+  submission_of_application+
+  initially_payable_to_your_institution+
+  open_end_line_of_credit+
+  business_or_commercial_purpose, data =
+  train2) %>%
+# convert selected numeric/categorical predictors into factor
+# So these predictors are treated as discrete categories rather than continuous numeric values.
+  step_mutate(loan_type = as.factor(loan_type),
+  loan_purpose = as.factor(loan_purpose),
+  construction_method = as.factor(construction_method),
+  occupancy_type = as.factor(occupancy_type),
+  ethnicity_of_applicant_or_borrower_1 = as.factor(ethnicity_of_applicant_or_borrower_1),
+  ethnicity_of_co_applicant_or_co_borrower_1 = as.factor(ethnicity_of_co_applicant_or_co_borrower_1),
+  race_of_applicant_or_borrower_1 = as.factor(race_of_applicant_or_borrower_1),
+  race_of_co_applicant_or_co_borrower_1 = as.factor(race_of_co_applicant_or_co_borrower_1),
+  sex_of_applicant_or_borrower = as.factor(sex_of_applicant_or_borrower),
+  sex_of_co_applicant_or_co_borrower = as.factor(sex_of_co_applicant_or_co_borrower),
+  age_of_applicant_or_borrower = as.factor(age_of_applicant_or_borrower),
+  age_of_co_applicant_or_co_borrower= as.factor(age_of_co_applicant_or_co_borrower),
+  automated_underwriting_system_1 = as.factor(automated_underwriting_system_1),
+  hoepa_status = as.factor(hoepa_status),
+  lien_status = as.factor(lien_status),
+  applicant_or_borrower_name_and_version_of_credit_scoring_model= as.factor(applicant_or_borrower_name_and_version_of_credit_scoring_model),
+  co_applicant_or_co_borrower_name_and_version_of_credit_scoring_model = as.factor(co_applicant_or_co_borrower_name_and_version_of_credit_scoring_model),
+  balloon_payment = as.factor(balloon_payment),
+  interest_only_payments= as.factor(interest_only_payments),
+  negative_amortization = as.factor(negative_amortization),
+  other_non_amortizing_features = as.factor(other_non_amortizing_features),
+  manufactured_home_secured_property_type = as.factor(manufactured_home_secured_property_type),
+  manufactured_home_land_property_interest = as.factor(manufactured_home_land_property_interest),
+  submission_of_application = as.factor(submission_of_application),
+  initially_payable_to_your_institution = as.factor(initially_payable_to_your_institution),
+  open_end_line_of_credit = as.factor(open_end_line_of_credit),
+  business_or_commercial_purpose = as.factor(business_or_commercial_purpose)) %>%
+# filling in missing values for categorical predictors by using the most frequent values
+  step_impute_mode(all_nominal_predictors()) %>%
+# filling in missing values for numeric predictors by using mean values
+  step_impute_mean(all_numeric_predictors()) %>%
+# standardize numeric variables
+  step_normalize(all_numeric_predictors()) %>%
+# Yeo Johnson transformation on predictors
+  step_YeoJohnson(all_numeric_predictors())
+
+
+# random forest models
+rf_model <- rand_forest(trees = 500, min_n = 2) %>%
+  set_mode("classification") %>%
+  set_engine("ranger")
+# Workflow
+rf_workflow <- workflow() %>%
+  add_recipe(recipe2) %>%
+  add_model(rf_model)
+# fit the data
+rf_workflow_fit <- rf_workflow %>%
+  fit(data = train2)
+# import test data
+test <- read_csv("test2.csv")
+
+# make prediction on the test data
+# bind the predicted values to the id column in the test data
+prediction <- rf_workflow_fit %>% predict(new_data = test) %>%
+  bind_cols(id = test$id)
+# exporting prediction as csv file for Kaggle submission
+prediction %>%
+  rename(action_taken = .pred_class) %>%
+  write_csv("rf_predictions.csv")
+```
+
